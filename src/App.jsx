@@ -2,13 +2,25 @@ import { useState, useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Dexie from "dexie";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Plus, Wind, ArrowRight, Target } from "lucide-react";
+import { Check, Plus, Wind, ArrowRight, Target, Filter } from "lucide-react";
 import confetti from "canvas-confetti";
 
 // ─── Local Database Setup ────────────────────────────────────────────────────
 const db = new Dexie("TrackerDB");
+
+// Version 1 (Legacy)
 db.version(1).stores({
   tasks: "++id, text, completed, createdAt"
+});
+
+// Version 2 (Context Upgrade)
+db.version(2).stores({
+  tasks: "++id, text, completed, createdAt, context"
+}).upgrade(tx => {
+  return tx.tasks.toCollection().modify(task => {
+    // Default any existing tasks to 'life' so nothing breaks
+    if (!task.context) task.context = "life";
+  });
 });
 
 // ─── Constants & Helpers ─────────────────────────────────────────────────────
@@ -18,6 +30,12 @@ const QUICK_CHIPS = [
 ];
 
 const OVERDUE_MS = 24 * 60 * 60 * 1000;
+
+const CONTEXTS = {
+  life: { label: "Life", color: "bg-gray-400", activeClass: "bg-gray-500 text-white border-gray-500" },
+  Work: { label: "Work", color: "bg-teal-400", activeClass: "bg-teal-500 text-white border-teal-500" },
+  study: { label: "Study", color: "bg-indigo-400", activeClass: "bg-indigo-500 text-white border-indigo-500" }
+};
 
 function getIsNight() {
   const h = new Date().getHours();
@@ -195,31 +213,66 @@ function Home({ userName, onReset }) {
   const [text, setText] = useState("");
   const [completingIds, setCompletingIds] = useState(new Set());
   const [focusMode, setFocusMode] = useState(false);
+  const [newTaskContext, setNewTaskContext] = useState("life");
+  const [activeFilter, setActiveFilter] = useState("all");
+  
   const isNight = useTimeOfDay();
   const now = Date.now();
 
-  const allTasks = useLiveQuery(() =>
-    db.tasks.filter((t) => !t.completed).toArray()
-  );
+  // ─── 4-Hour Nudge Logic ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    const FOUR_HOURS = 4 * 60 * 60 * 1000;
+    const reminderInterval = setInterval(() => {
+      if (pendingCount > 0 && Notification.permission === "granted") {
+        new Notification("Daily Acumen", {
+          body: `You still have ${pendingCount} task${pendingCount > 1 ? 's' : ''} pending. Time to get moving.`,
+          icon: "/vite.svg"
+        });
+      }
+    }, FOUR_HOURS);
+    return () => clearInterval(reminderInterval);
+  }, []);
 
-  const tasks = allTasks ?? [];
+ // Ask for ALL tasks so we know if they have a history
+  const rawTasks = useLiveQuery(() => db.tasks.toArray());
+  
+  // Filter out the completed ones for the main display
+  const tasks = rawTasks?.filter(t => !t.completed) ?? [];
+  const totalTasksHistory = rawTasks?.length ?? 0;
+  
   const sortedTasks = [...tasks].sort((a, b) => a.createdAt - b.createdAt);
-  const visibleTasks = focusMode ? sortedTasks.slice(0, 1) : sortedTasks;
-  const hasOverdue = tasks.some((t) => now - t.createdAt > OVERDUE_MS);
-  const pendingCount = tasks.length;
+  // Apply contextual filter
+  const filteredTasks = activeFilter === "all" 
+    ? sortedTasks 
+    : sortedTasks.filter(t => (t.context || "life") === activeFilter);
 
-  const subHeading = hasOverdue
+  // Apply focus mode
+  const visibleTasks = focusMode ? filteredTasks.slice(0, 1) : filteredTasks;
+  const hasOverdue = filteredTasks.some((t) => now - t.createdAt > OVERDUE_MS);
+  const pendingCount = filteredTasks.length;
+
+ const subHeading = hasOverdue
     ? "Still ignoring these, huh?"
-    : pendingCount === 0
+    : tasks.length === 0 && totalTasksHistory > 0
+    ? "You are all caught up for today."
+    : tasks.length === 0
     ? "What do you have to do today?"
     : pendingCount <= 5
     ? "Here's what you have for today, you've got this!"
     : "Long day ahead, you've got this.";
 
-  const handleAdd = async (taskText) => {
+  const handleAdd = async (taskText, forceContext = null) => {
     const trimmed = taskText.trim();
     if (!trimmed) return;
-    await db.tasks.add({ text: trimmed, completed: false, createdAt: Date.now() });
+    await db.tasks.add({ 
+      text: trimmed, 
+      completed: false, 
+      createdAt: Date.now(),
+      context: forceContext || newTaskContext
+    });
     setText("");
   };
 
@@ -247,31 +300,20 @@ function Home({ userName, onReset }) {
     }, 400);
   };
 
-  const bgClass = isNight
-    ? "bg-gradient-to-br from-indigo-950 to-purple-900"
-    : "bg-gradient-to-br from-blue-50 to-yellow-100";
+  const bgClass = isNight ? "bg-gradient-to-br from-indigo-950 to-purple-900" : "bg-gradient-to-br from-blue-50 to-yellow-100";
   const headingClass = isNight ? "text-white" : "text-gray-900";
-  const subClass = hasOverdue
-    ? isNight ? "text-red-400/80" : "text-red-400"
-    : isNight ? "text-white/50" : "text-gray-400";
+  const subClass = hasOverdue ? isNight ? "text-red-400/80" : "text-red-400" : isNight ? "text-white/50" : "text-gray-400";
   const cardBorderClass = isNight ? "bg-white/8 border-white/10" : "bg-white/80 border-white/60";
-  const inputClass = isNight
-    ? "bg-white/10 border-white/15 text-white placeholder:text-white/30 focus:border-white/40 focus:ring-white/20"
-    : "bg-white/80 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-indigo-300 focus:ring-indigo-100";
-  const taskCardClass = isNight
-    ? "bg-white/10 border-white/10 shadow-sm"
-    : "bg-white/90 border-gray-100 shadow-sm";
+  const inputClass = isNight ? "bg-white/10 border-white/15 text-white placeholder:text-white/30 focus:border-white/40 focus:ring-white/20" : "bg-white/80 border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-indigo-300 focus:ring-indigo-100";
+  const taskCardClass = isNight ? "bg-white/10 border-white/10 shadow-sm" : "bg-white/90 border-gray-100 shadow-sm";
   const checkBorderClass = isNight ? "border-white/30" : "border-gray-300";
   const emptyIconClass = isNight ? "bg-white/10 text-white/30" : "bg-gray-100 text-gray-300";
   const emptyTextClass = isNight ? "text-white/30" : "text-gray-400";
-  const chipClass = isNight
-    ? "bg-white/10 border-white/15 text-white/70 hover:bg-white/20 hover:text-white"
-    : "bg-white/70 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-800";
-  const focusActiveClass = focusMode
-    ? "bg-indigo-500 text-white border-indigo-500"
-    : isNight
-    ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20"
-    : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
+  const chipClass = isNight ? "bg-white/10 border-white/15 text-white/70 hover:bg-white/20 hover:text-white" : "bg-white/70 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-800";
+  
+  const focusActiveClass = focusMode ? "bg-indigo-500 text-white border-indigo-500" : isNight ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20" : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
+  const filterBtnBase = `text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95`;
+  const filterBtnInactive = isNight ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20" : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
 
   return (
     <div className={`relative min-h-[100dvh] w-full flex justify-center transition-all duration-1000 ${bgClass}`}>
@@ -316,6 +358,26 @@ function Home({ userName, onReset }) {
           </button>
         </form>
 
+        {/* ── Context Tagger for New Tasks ── */}
+        <div className="flex gap-2 mb-6">
+          {Object.entries(CONTEXTS).map(([key, config]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setNewTaskContext(key)}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all duration-200 ${
+                newTaskContext === key 
+                  ? config.activeClass 
+                  : isNight ? "border-white/15 text-white/50 hover:bg-white/10" : "border-gray-200 text-gray-400 hover:bg-gray-50"
+              }`}
+            >
+              <div className={`w-2 h-2 rounded-full ${config.color}`} />
+              {config.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Quick Chips ── */}
         <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none">
           {QUICK_CHIPS.map((chip) => (
             <button
@@ -328,12 +390,26 @@ function Home({ userName, onReset }) {
           ))}
         </div>
 
-        <div className="flex items-center justify-between mb-4">
-          <span className={`text-xs font-medium ${isNight ? "text-white/30" : "text-gray-400"}`}>
-            {pendingCount === 0
-              ? "No pending tasks"
-              : `${pendingCount} task${pendingCount !== 1 ? "s" : ""} pending`}
-          </span>
+        {/* ── Tool Bar: Filters & Focus Mode ── */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none">
+            <button 
+              onClick={() => setActiveFilter("all")} 
+              className={`${filterBtnBase} ${activeFilter === "all" ? (isNight ? "bg-white/20 text-white border-white/30" : "bg-gray-800 text-white border-gray-800") : filterBtnInactive}`}
+            >
+              All
+            </button>
+            {Object.entries(CONTEXTS).map(([key, config]) => (
+              <button
+                key={key}
+                onClick={() => setActiveFilter(key)}
+                className={`${filterBtnBase} ${activeFilter === key ? config.activeClass : filterBtnInactive}`}
+              >
+                {config.label}
+              </button>
+            ))}
+          </div>
+          
           <button
             onClick={() => setFocusMode((f) => !f)}
             className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 ${focusActiveClass}`}
@@ -344,7 +420,7 @@ function Home({ userName, onReset }) {
         </div>
 
         <div className="flex-1">
-          {allTasks === undefined ? (
+         {rawTasks === undefined ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className={`h-16 rounded-2xl animate-pulse ${isNight ? "bg-white/10" : "bg-gray-100/80"}`} />
@@ -359,7 +435,9 @@ function Home({ userName, onReset }) {
               <div className={`w-16 h-16 mb-4 rounded-full flex items-center justify-center ${emptyIconClass}`}>
                 <Wind size={28} />
               </div>
-              <p className={`text-sm ${emptyTextClass}`}>You are all caught up.</p>
+              <p className={`text-sm ${emptyTextClass}`}>
+                {activeFilter === "all" ? "You are all caught up." : `No pending ${CONTEXTS[activeFilter].label.toLowerCase()} tasks.`}
+              </p>
             </motion.div>
           ) : focusMode && visibleTasks.length === 0 ? (
             <motion.div
@@ -376,6 +454,7 @@ function Home({ userName, onReset }) {
                   {visibleTasks.map((task) => {
                     const isCompleting = completingIds.has(task.id);
                     const isOverdue = now - task.createdAt > OVERDUE_MS;
+                    const taskContextColor = CONTEXTS[task.context || 'life'].color;
 
                     const taskTextClass = isCompleting
                       ? isNight ? "text-white/30 line-through" : "text-gray-300 line-through"
@@ -405,9 +484,14 @@ function Home({ userName, onReset }) {
                         >
                           <Check size={14} strokeWidth={3} className={`transition-opacity ${isCompleting ? "opacity-100 text-white" : "opacity-0 group-hover:opacity-40 text-indigo-400"}`} />
                         </button>
+                        
+                        {/* Context Color Indicator */}
+                        <div className={`w-2 h-2 rounded-full shrink-0 mr-3 ${taskContextColor} ${isCompleting ? 'opacity-30' : 'opacity-100'}`} />
+
                         <span className={`text-base flex-1 transition-all duration-200 ${taskTextClass}`}>
                           {task.text}
                         </span>
+                        
                         {isOverdue && !isCompleting && (
                           <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${isNight ? "bg-red-500/15 text-red-400/80" : "bg-red-50 text-red-400"}`}>
                             overdue
