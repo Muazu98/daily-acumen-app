@@ -2,23 +2,20 @@ import { useState, useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Dexie from "dexie";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Plus, Wind, ArrowRight, Target, Filter } from "lucide-react";
+import { Check, Plus, Wind, ArrowRight, Target, Briefcase, BookOpen, Coffee, RefreshCw } from "lucide-react";
 import confetti from "canvas-confetti";
 
 // ─── Local Database Setup ────────────────────────────────────────────────────
 const db = new Dexie("TrackerDB");
 
-// Version 1 (Legacy)
 db.version(1).stores({
   tasks: "++id, text, completed, createdAt"
 });
 
-// Version 2 (Context Upgrade)
 db.version(2).stores({
   tasks: "++id, text, completed, createdAt, context"
 }).upgrade(tx => {
   return tx.tasks.toCollection().modify(task => {
-    // Default any existing tasks to 'life' so nothing breaks
     if (!task.context) task.context = "life";
   });
 });
@@ -32,9 +29,9 @@ const QUICK_CHIPS = [
 const OVERDUE_MS = 24 * 60 * 60 * 1000;
 
 const CONTEXTS = {
-  life: { label: "Life", color: "bg-gray-400", activeClass: "bg-gray-500 text-white border-gray-500" },
-  Work: { label: "Work", color: "bg-teal-400", activeClass: "bg-teal-500 text-white border-teal-500" },
-  study: { label: "Study", color: "bg-indigo-400", activeClass: "bg-indigo-500 text-white border-indigo-500" }
+  life: { label: "Life", icon: Coffee, color: "bg-gray-400", textClass: "text-gray-500", activeClass: "bg-gray-500 text-white border-gray-500" },
+  work: { label: "Work", icon: Briefcase, color: "bg-teal-400", textClass: "text-teal-500", activeClass: "bg-teal-500 text-white border-teal-500" },
+  study: { label: "Study", icon: BookOpen, color: "bg-indigo-400", textClass: "text-indigo-500", activeClass: "bg-indigo-500 text-white border-indigo-500" }
 };
 
 function getIsNight() {
@@ -70,30 +67,6 @@ function DayScene() {
           ))}
         </svg>
       </motion.div>
-      <motion.div
-        className="absolute top-16 left-6 md:left-16"
-        animate={{ x: [0, 10, 0] }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <svg width="120" height="60" viewBox="0 0 120 60" fill="none">
-          <ellipse cx="60" cy="42" rx="54" ry="18" fill="white" opacity="0.75" />
-          <ellipse cx="42" cy="36" rx="28" ry="22" fill="white" opacity="0.8" />
-          <ellipse cx="72" cy="34" rx="24" ry="20" fill="white" opacity="0.8" />
-          <ellipse cx="56" cy="28" rx="20" ry="16" fill="white" opacity="0.85" />
-        </svg>
-      </motion.div>
-      <motion.div
-        className="absolute bottom-28 right-4 md:right-20"
-        animate={{ x: [0, -8, 0] }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-      >
-        <svg width="80" height="40" viewBox="0 0 80 40" fill="none">
-          <ellipse cx="40" cy="28" rx="36" ry="12" fill="white" opacity="0.6" />
-          <ellipse cx="28" cy="22" rx="18" ry="14" fill="white" opacity="0.65" />
-          <ellipse cx="50" cy="20" rx="16" ry="13" fill="white" opacity="0.65" />
-          <ellipse cx="38" cy="16" rx="14" ry="11" fill="white" opacity="0.7" />
-        </svg>
-      </motion.div>
     </div>
   );
 }
@@ -103,18 +76,10 @@ function NightScene() {
     { x: "8%",  y: "12%", r: 2,   delay: 0 },
     { x: "22%", y: "6%",  r: 1.5, delay: 0.5 },
     { x: "38%", y: "9%",  r: 2.5, delay: 1.2 },
-    { x: "55%", y: "4%",  r: 1.5, delay: 0.3 },
     { x: "70%", y: "10%", r: 2,   delay: 0.8 },
     { x: "85%", y: "6%",  r: 1.5, delay: 1.5 },
     { x: "92%", y: "18%", r: 3,   delay: 0.6 },
     { x: "15%", y: "30%", r: 1.5, delay: 1.8 },
-    { x: "5%",  y: "45%", r: 2,   delay: 0.9 },
-    { x: "90%", y: "35%", r: 1.5, delay: 1.1 },
-    { x: "78%", y: "25%", r: 2,   delay: 0.4 },
-    { x: "62%", y: "18%", r: 1.5, delay: 1.6 },
-    { x: "47%", y: "22%", r: 1,   delay: 2.0 },
-    { x: "30%", y: "19%", r: 1.5, delay: 0.7 },
-    { x: "95%", y: "50%", r: 1,   delay: 1.3 },
   ];
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none select-none" aria-hidden>
@@ -127,8 +92,6 @@ function NightScene() {
           <circle cx="32" cy="32" r="28" fill="#818CF8" opacity="0.08" />
           <circle cx="32" cy="32" r="22" fill="#C7D2FE" opacity="0.85" />
           <circle cx="43" cy="26" r="17" fill="#1E1B4B" opacity="0.95" />
-          <circle cx="22" cy="38" r="2" fill="#A5B4FC" opacity="0.4" />
-          <circle cx="28" cy="44" r="1.5" fill="#A5B4FC" opacity="0.3" />
         </svg>
       </motion.div>
       {stars.map((s, i) => (
@@ -219,42 +182,24 @@ function Home({ userName, onReset }) {
   const isNight = useTimeOfDay();
   const now = Date.now();
 
-  // ─── 4-Hour Nudge Logic ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-    const FOUR_HOURS = 4 * 60 * 60 * 1000;
-    const reminderInterval = setInterval(() => {
-      if (pendingCount > 0 && Notification.permission === "granted") {
-        new Notification("Daily Acumen", {
-          body: `You still have ${pendingCount} task${pendingCount > 1 ? 's' : ''} pending. Time to get moving.`,
-          icon: "/vite.svg"
-        });
-      }
-    }, FOUR_HOURS);
-    return () => clearInterval(reminderInterval);
-  }, []);
-
- // Ask for ALL tasks so we know if they have a history
   const rawTasks = useLiveQuery(() => db.tasks.toArray());
-  
-  // Filter out the completed ones for the main display
   const tasks = rawTasks?.filter(t => !t.completed) ?? [];
   const totalTasksHistory = rawTasks?.length ?? 0;
   
   const sortedTasks = [...tasks].sort((a, b) => a.createdAt - b.createdAt);
-  // Apply contextual filter
+  
   const filteredTasks = activeFilter === "all" 
     ? sortedTasks 
     : sortedTasks.filter(t => (t.context || "life") === activeFilter);
 
-  // Apply focus mode
   const visibleTasks = focusMode ? filteredTasks.slice(0, 1) : filteredTasks;
+  const overdueTasks = visibleTasks.filter(t => now - t.createdAt > OVERDUE_MS);
+  const todayTasks = visibleTasks.filter(t => now - t.createdAt <= OVERDUE_MS);
+  
   const hasOverdue = filteredTasks.some((t) => now - t.createdAt > OVERDUE_MS);
   const pendingCount = filteredTasks.length;
 
- const subHeading = hasOverdue
+  const subHeading = hasOverdue
     ? "Still ignoring these, huh?"
     : tasks.length === 0 && totalTasksHistory > 0
     ? "You are all caught up for today."
@@ -300,6 +245,13 @@ function Home({ userName, onReset }) {
     }, 400);
   };
 
+  // ─── Wellness Feature: Reschedule Task ───
+  const handleBump = (id) => {
+    // Resetting the timestamp effectively brings it out of the overdue state
+    db.tasks.update(id, { createdAt: Date.now() });
+  };
+
+  // ─── Theme Variables ───────────────────────────────────────────────────────
   const bgClass = isNight ? "bg-gradient-to-br from-indigo-950 to-purple-900" : "bg-gradient-to-br from-blue-50 to-yellow-100";
   const headingClass = isNight ? "text-white" : "text-gray-900";
   const subClass = hasOverdue ? isNight ? "text-red-400/80" : "text-red-400" : isNight ? "text-white/50" : "text-gray-400";
@@ -312,8 +264,74 @@ function Home({ userName, onReset }) {
   const chipClass = isNight ? "bg-white/10 border-white/15 text-white/70 hover:bg-white/20 hover:text-white" : "bg-white/70 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-800";
   
   const focusActiveClass = focusMode ? "bg-indigo-500 text-white border-indigo-500" : isNight ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20" : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
-  const filterBtnBase = `text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95`;
+  const filterBtnBase = `flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95`;
   const filterBtnInactive = isNight ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20" : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
+
+  // ─── Task Card Renderer ────────────────────────────────────────────────────
+  const renderTaskCard = (task) => {
+    const isCompleting = completingIds.has(task.id);
+    const isOverdue = now - task.createdAt > OVERDUE_MS;
+    const contextConfig = CONTEXTS[task.context || 'life'];
+    const TaskIcon = contextConfig.icon;
+
+    const taskTextClass = isCompleting
+      ? isNight ? "text-white/30 line-through font-normal" : "text-gray-300 line-through font-normal"
+      : isOverdue
+      ? isNight ? "text-red-400/90 font-medium" : "text-red-600 font-medium"
+      : isNight ? "text-white/90 font-normal" : "text-gray-800 font-normal";
+
+    const cardBaseClass = isOverdue && !isCompleting
+      ? isNight ? "bg-red-500/10 border-red-500/20 shadow-sm" : "bg-red-50 border-red-200 shadow-sm"
+      : taskCardClass;
+
+    return (
+      <motion.li
+        layout
+        key={task.id}
+        initial={{ opacity: 0, y: 15, scale: 0.98 }}
+        animate={{ opacity: isCompleting ? 0 : 1, y: 0, scale: 1, x: isCompleting ? 20 : 0 }}
+        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        className={`flex items-center p-5 rounded-2xl border backdrop-blur-sm group ${cardBaseClass}`}
+      >
+        <button
+          onClick={() => completeTask(task.id)}
+          className={`shrink-0 w-7 h-7 mr-4 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+            isCompleting
+              ? "bg-indigo-500 border-indigo-500 scale-110"
+              : isOverdue
+              ? "border-red-400/50 hover:border-red-400 hover:bg-red-400/10"
+              : `${checkBorderClass} hover:border-indigo-400 hover:bg-indigo-400/10`
+          }`}
+        >
+          <Check size={14} strokeWidth={3} className={`transition-opacity ${isCompleting ? "opacity-100 text-white" : "opacity-0 group-hover:opacity-40 text-indigo-400"}`} />
+        </button>
+        
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-4 transition-opacity ${contextConfig.color} bg-opacity-20 ${isCompleting ? 'opacity-30' : 'opacity-100'}`}>
+           <TaskIcon size={14} className={contextConfig.textClass} />
+        </div>
+
+        <span className={`text-base leading-relaxed flex-1 transition-all duration-200 ${taskTextClass}`}>
+          {task.text}
+        </span>
+        
+        {isOverdue && !isCompleting && (
+          <div className="flex items-center gap-2 ml-3">
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-widest ${isNight ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-500"}`}>
+              Priority
+            </span>
+            <button
+              onClick={() => handleBump(task.id)}
+              title="Bump to today"
+              className={`p-1.5 rounded-lg border transition-all active:scale-95 ${isNight ? "border-white/10 text-white/40 hover:bg-white/10 hover:text-white" : "border-gray-200 text-gray-400 hover:bg-gray-100 hover:text-gray-700"}`}
+            >
+              <RefreshCw size={14} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
+      </motion.li>
+    );
+  };
 
   return (
     <div className={`relative min-h-[100dvh] w-full flex justify-center transition-all duration-1000 ${bgClass}`}>
@@ -358,26 +376,27 @@ function Home({ userName, onReset }) {
           </button>
         </form>
 
-        {/* ── Context Tagger for New Tasks ── */}
         <div className="flex gap-2 mb-6">
-          {Object.entries(CONTEXTS).map(([key, config]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setNewTaskContext(key)}
-              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all duration-200 ${
-                newTaskContext === key 
-                  ? config.activeClass 
-                  : isNight ? "border-white/15 text-white/50 hover:bg-white/10" : "border-gray-200 text-gray-400 hover:bg-gray-50"
-              }`}
-            >
-              <div className={`w-2 h-2 rounded-full ${config.color}`} />
-              {config.label}
-            </button>
-          ))}
+          {Object.entries(CONTEXTS).map(([key, config]) => {
+            const Icon = config.icon;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setNewTaskContext(key)}
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all duration-200 ${
+                  newTaskContext === key 
+                    ? config.activeClass 
+                    : isNight ? "border-white/15 text-white/50 hover:bg-white/10" : "border-gray-200 text-gray-400 hover:bg-gray-50"
+                }`}
+              >
+                <Icon size={12} className={newTaskContext === key ? "text-white" : config.textClass} />
+                {config.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* ── Quick Chips ── */}
         <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none">
           {QUICK_CHIPS.map((chip) => (
             <button
@@ -390,8 +409,7 @@ function Home({ userName, onReset }) {
           ))}
         </div>
 
-        {/* ── Tool Bar: Filters & Focus Mode ── */}
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex gap-2 overflow-x-auto scrollbar-none">
             <button 
               onClick={() => setActiveFilter("all")} 
@@ -399,15 +417,19 @@ function Home({ userName, onReset }) {
             >
               All
             </button>
-            {Object.entries(CONTEXTS).map(([key, config]) => (
-              <button
-                key={key}
-                onClick={() => setActiveFilter(key)}
-                className={`${filterBtnBase} ${activeFilter === key ? config.activeClass : filterBtnInactive}`}
-              >
-                {config.label}
-              </button>
-            ))}
+            {Object.entries(CONTEXTS).map(([key, config]) => {
+              const Icon = config.icon;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveFilter(key)}
+                  className={`${filterBtnBase} ${activeFilter === key ? config.activeClass : filterBtnInactive}`}
+                >
+                  <Icon size={13} className={activeFilter === key ? "text-white" : config.textClass} />
+                  {config.label}
+                </button>
+              );
+            })}
           </div>
           
           <button
@@ -420,8 +442,8 @@ function Home({ userName, onReset }) {
         </div>
 
         <div className="flex-1">
-         {rawTasks === undefined ? (
-            <div className="space-y-3">
+          {rawTasks === undefined ? (
+            <div className="space-y-4">
               {[1, 2, 3].map((i) => (
                 <div key={i} className={`h-16 rounded-2xl animate-pulse ${isNight ? "bg-white/10" : "bg-gray-100/80"}`} />
               ))}
@@ -439,80 +461,61 @@ function Home({ userName, onReset }) {
                 {activeFilter === "all" ? "You are all caught up." : `No pending ${CONTEXTS[activeFilter].label.toLowerCase()} tasks.`}
               </p>
             </motion.div>
-          ) : focusMode && visibleTasks.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`text-center text-sm mt-8 ${emptyTextClass}`}
-            >
-              Nothing to focus on right now.
-            </motion.div>
+          ) : focusMode ? (
+            <div className="space-y-4 pb-4">
+               {visibleTasks.length === 0 ? (
+                 <motion.div
+                   initial={{ opacity: 0, y: 10 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   className={`text-center text-sm mt-8 ${emptyTextClass}`}
+                 >
+                   Nothing to focus on right now.
+                 </motion.div>
+               ) : (
+                 <>
+                   <ul className="space-y-4">
+                     <AnimatePresence mode="popLayout">
+                       {visibleTasks.map(renderTaskCard)}
+                     </AnimatePresence>
+                   </ul>
+                   {pendingCount > 1 && (
+                     <motion.p
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       className={`text-center text-xs mt-3 ${isNight ? "text-white/25" : "text-gray-300"}`}
+                     >
+                       {pendingCount - 1} more task{pendingCount - 1 !== 1 ? "s" : ""} hidden — stay focused.
+                     </motion.p>
+                   )}
+                 </>
+               )}
+            </div>
           ) : (
-            <>
-              <ul className="space-y-3 pb-4">
-                <AnimatePresence mode="popLayout">
-                  {visibleTasks.map((task) => {
-                    const isCompleting = completingIds.has(task.id);
-                    const isOverdue = now - task.createdAt > OVERDUE_MS;
-                    const taskContextColor = CONTEXTS[task.context || 'life'].color;
-
-                    const taskTextClass = isCompleting
-                      ? isNight ? "text-white/30 line-through" : "text-gray-300 line-through"
-                      : isOverdue
-                      ? isNight ? "text-red-400/80" : "text-red-400"
-                      : isNight ? "text-white/90" : "text-gray-800";
-
-                    return (
-                      <motion.li
-                        layout
-                        key={task.id}
-                        initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                        animate={{ opacity: isCompleting ? 0 : 1, y: 0, scale: 1, x: isCompleting ? 20 : 0 }}
-                        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                        className={`flex items-center p-4 rounded-2xl border backdrop-blur-sm group ${taskCardClass}`}
-                      >
-                        <button
-                          onClick={() => completeTask(task.id)}
-                          className={`shrink-0 w-7 h-7 mr-4 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                            isCompleting
-                              ? "bg-indigo-500 border-indigo-500 scale-110"
-                              : isOverdue
-                              ? "border-red-400/50 hover:border-red-400 hover:bg-red-400/10"
-                              : `${checkBorderClass} hover:border-indigo-400 hover:bg-indigo-400/10`
-                          }`}
-                        >
-                          <Check size={14} strokeWidth={3} className={`transition-opacity ${isCompleting ? "opacity-100 text-white" : "opacity-0 group-hover:opacity-40 text-indigo-400"}`} />
-                        </button>
-                        
-                        {/* Context Color Indicator */}
-                        <div className={`w-2 h-2 rounded-full shrink-0 mr-3 ${taskContextColor} ${isCompleting ? 'opacity-30' : 'opacity-100'}`} />
-
-                        <span className={`text-base flex-1 transition-all duration-200 ${taskTextClass}`}>
-                          {task.text}
-                        </span>
-                        
-                        {isOverdue && !isCompleting && (
-                          <span className={`ml-3 text-xs font-medium px-2 py-0.5 rounded-full ${isNight ? "bg-red-500/15 text-red-400/80" : "bg-red-50 text-red-400"}`}>
-                            overdue
-                          </span>
-                        )}
-                      </motion.li>
-                    );
-                  })}
-                </AnimatePresence>
-              </ul>
-
-              {focusMode && pendingCount > 1 && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className={`text-center text-xs mt-2 ${isNight ? "text-white/25" : "text-gray-300"}`}
-                >
-                  {pendingCount - 1} more task{pendingCount - 1 !== 1 ? "s" : ""} hidden — stay focused.
-                </motion.p>
+            <div className="space-y-8 pb-4">
+              {overdueTasks.length > 0 && (
+                <div>
+                  <h3 className={`text-xs font-bold uppercase tracking-widest mb-4 ml-1 ${isNight ? 'text-red-400/80' : 'text-red-500/80'}`}>Overdue</h3>
+                  <ul className="space-y-4">
+                    <AnimatePresence mode="popLayout">
+                      {overdueTasks.map(renderTaskCard)}
+                    </AnimatePresence>
+                  </ul>
+                </div>
               )}
-            </>
+              
+              {todayTasks.length > 0 && (
+                <div>
+                  {overdueTasks.length > 0 && (
+                     <h3 className={`text-xs font-bold uppercase tracking-widest mb-4 ml-1 mt-6 ${isNight ? 'text-white/40' : 'text-gray-400'}`}>Today</h3>
+                  )}
+                  <ul className="space-y-4">
+                    <AnimatePresence mode="popLayout">
+                      {todayTasks.map(renderTaskCard)}
+                    </AnimatePresence>
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -520,7 +523,6 @@ function Home({ userName, onReset }) {
   );
 }
 
-// ─── Root App Component ──────────────────────────────────────────────────────
 export default function App() {
   const [userName, setUserName] = useState(() => localStorage.getItem("userName"));
 
