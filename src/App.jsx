@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Dexie from "dexie";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Plus, Wind, ArrowRight, Target, Briefcase, BookOpen, Coffee, RefreshCw } from "lucide-react";
+import { Check, Plus, Wind, ArrowRight, Target, Briefcase, BookOpen, Coffee, RefreshCw, Flame } from "lucide-react";
 import confetti from "canvas-confetti";
 
 // ─── Local Database Setup ────────────────────────────────────────────────────
@@ -178,6 +178,7 @@ function Home({ userName, onReset }) {
   const [focusMode, setFocusMode] = useState(false);
   const [newTaskContext, setNewTaskContext] = useState("life");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [streak, setStreak] = useState(() => parseInt(localStorage.getItem("streak") || "0"));
   
   const isNight = useTimeOfDay();
   const now = Date.now();
@@ -226,8 +227,35 @@ function Home({ userName, onReset }) {
     handleAdd(text);
   };
 
+  // ─── Wellness Feature: Streak Tracker ───
+  const checkAndUpdateStreak = () => {
+    const today = new Date().toDateString();
+    const lastActive = localStorage.getItem("lastActiveDate");
+    let currentStreak = parseInt(localStorage.getItem("streak") || "0");
+
+    // If already active today, do nothing
+    if (lastActive === today) return;
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (lastActive === yesterday.toDateString()) {
+      currentStreak += 1;
+    } else {
+      currentStreak = 1; // Reset or start new streak
+    }
+
+    localStorage.setItem("streak", currentStreak.toString());
+    localStorage.setItem("lastActiveDate", today);
+    setStreak(currentStreak);
+  };
+
   const completeTask = (id) => {
     if (completingIds.has(id)) return;
+    
+    // Update streak on completion
+    checkAndUpdateStreak();
+    
     setCompletingIds((prev) => new Set(prev).add(id));
     confetti({
       particleCount: 80,
@@ -247,7 +275,6 @@ function Home({ userName, onReset }) {
 
   // ─── Wellness Feature: Reschedule Task ───
   const handleBump = (id) => {
-    // Resetting the timestamp effectively brings it out of the overdue state
     db.tasks.update(id, { createdAt: Date.now() });
   };
 
@@ -340,9 +367,29 @@ function Home({ userName, onReset }) {
       <div className="relative z-10 w-full max-w-lg px-6 py-12 md:py-20 flex flex-col">
         <header className="mb-10">
           <div className="flex items-start justify-between gap-4">
-            <h1 className={`text-4xl md:text-5xl font-bold tracking-tight mb-3 transition-colors duration-700 ${headingClass}`}>
-              Hello, {userName}.
-            </h1>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <h1 className={`text-4xl md:text-5xl font-bold tracking-tight transition-colors duration-700 ${headingClass}`}>
+                  Hello, {userName}.
+                </h1>
+                {/* ── Streak Badge ── */}
+                <AnimatePresence>
+                  {streak > 0 && (
+                    <motion.div 
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-sm ${isNight ? "bg-orange-500/20 border-orange-500/30 text-orange-400" : "bg-orange-50 border-orange-200 text-orange-500"}`}
+                    >
+                      <Flame size={16} className={`fill-current ${isNight ? "text-orange-400" : "text-orange-500"}`} />
+                      <span className="text-sm font-bold">{streak}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <p className={`text-lg italic font-light transition-colors duration-500 ${subClass}`}>
+                {subHeading}
+              </p>
+            </div>
             <button
               onClick={onReset}
               className={`mt-2 shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition-all duration-150 active:scale-95 ${
@@ -354,9 +401,6 @@ function Home({ userName, onReset }) {
               Change name
             </button>
           </div>
-          <p className={`text-lg italic font-light transition-colors duration-500 ${subClass}`}>
-            {subHeading}
-          </p>
         </header>
 
         <form onSubmit={handleFormSubmit} className={`mb-3 relative flex items-center rounded-2xl border backdrop-blur-sm shadow-sm ${cardBorderClass}`}>
