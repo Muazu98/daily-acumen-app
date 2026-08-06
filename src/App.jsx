@@ -185,7 +185,6 @@ function Home({ userName, onReset }) {
 
   const rawTasks = useLiveQuery(() => db.tasks.toArray());
   const tasks = rawTasks?.filter(t => !t.completed) ?? [];
-  const totalTasksHistory = rawTasks?.length ?? 0;
   
   const sortedTasks = [...tasks].sort((a, b) => a.createdAt - b.createdAt);
   
@@ -200,12 +199,13 @@ function Home({ userName, onReset }) {
   const hasOverdue = filteredTasks.some((t) => now - t.createdAt > OVERDUE_MS);
   const pendingCount = filteredTasks.length;
 
+  const isAllCaughtUp = tasks.length === 0;
+  const dateString = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
   const subHeading = hasOverdue
     ? "Still ignoring these, huh?"
-    : tasks.length === 0 && totalTasksHistory > 0
-    ? "You are all caught up for today."
-    : tasks.length === 0
-    ? "What do you have to do today?"
+    : isAllCaughtUp
+    ? dateString
     : pendingCount <= 5
     ? "Here's what you have for today, you've got this!"
     : "Long day ahead, you've got this.";
@@ -283,11 +283,9 @@ function Home({ userName, onReset }) {
   const emptyIconClass = isNight ? "bg-white/10 text-white/30" : "bg-gray-100 text-gray-300";
   const emptyTextClass = isNight ? "text-white/30" : "text-gray-400";
   
-  // Distinguish Quick Chips from tags visually
   const quickChipClass = isNight ? "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white" : "bg-white/40 border-gray-200/50 text-gray-500 hover:bg-white hover:text-gray-800";
   const focusActiveClass = focusMode ? "bg-indigo-500 text-white border-indigo-500 shadow-md" : isNight ? "bg-white/10 border-white/15 text-white/80 hover:bg-white/20" : "bg-white shadow-sm border-gray-200 text-gray-600 hover:border-gray-300";
 
-  // Tab bases
   const tabBase = `pb-2 text-sm font-medium border-b-2 transition-all duration-200 px-1`;
   const tabInactive = isNight ? "border-transparent text-white/40 hover:text-white/70" : "border-transparent text-gray-400 hover:text-gray-600";
 
@@ -378,12 +376,13 @@ function Home({ userName, onReset }) {
                   </button>
                 </h1>
                 
-                {/* ── Streak Badge (Only shows if > 0) ── */}
+                {/* ── Header Streak Badge (Hides when the big one shows) ── */}
                 <AnimatePresence>
-                  {streak > 0 && (
+                  {streak > 0 && !isAllCaughtUp && (
                     <motion.div 
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm ${isNight ? "bg-orange-500/20 border-orange-500/30 text-orange-400" : "bg-orange-50 border-orange-200 text-orange-500"}`}
                     >
                       <Flame size={16} className={`fill-current ${isNight ? "text-orange-400" : "text-orange-500"}`} />
@@ -416,7 +415,6 @@ function Home({ userName, onReset }) {
           </button>
         </form>
 
-        {/* ── Elevated Action Row: Categories & Focus Mode ── */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex gap-2">
             {Object.entries(CONTEXTS).map(([key, config]) => {
@@ -448,17 +446,17 @@ function Home({ userName, onReset }) {
           </button>
         </div>
 
-        {/* ── Quick Add Section (Differentiated) ── */}
         <div className="mb-8">
           <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ml-1 ${isNight ? "text-white/30" : "text-gray-400"}`}>
             Quick Add
           </p>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {/* Added pr-6 here to prevent the last item from hitting a hard visual wall */}
+          <div className="flex gap-2 overflow-x-auto pb-2 pr-6 scrollbar-none snap-x">
             {QUICK_CHIPS.map((chip) => (
               <button
                 key={chip}
                 onClick={() => handleAdd(chip)}
-                className={`flex items-center gap-1.5 shrink-0 text-sm px-4 py-2 rounded-full border backdrop-blur-sm transition-all duration-150 active:scale-95 ${quickChipClass}`}
+                className={`snap-start flex items-center gap-1.5 shrink-0 text-sm px-4 py-2 rounded-full border backdrop-blur-sm transition-all duration-150 active:scale-95 ${quickChipClass}`}
               >
                 <Plus size={14} className={isNight ? "text-white/40" : "text-gray-400"} />
                 {chip}
@@ -467,7 +465,6 @@ function Home({ userName, onReset }) {
           </div>
         </div>
 
-        {/* ── Clean Underlined Tabs ── */}
         <div className={`flex gap-6 border-b mb-6 overflow-x-auto scrollbar-none ${isNight ? "border-white/10" : "border-gray-200"}`}>
           <button 
             onClick={() => setActiveFilter("all")} 
