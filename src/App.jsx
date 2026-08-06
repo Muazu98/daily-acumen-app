@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Dexie from "dexie";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Plus, Wind, ArrowRight, Target, Briefcase, BookOpen, Coffee, RefreshCw, Flame } from "lucide-react";
+import { Check, Plus, Wind, ArrowRight, Target, Briefcase, BookOpen, Coffee, RefreshCw, Flame, Pencil } from "lucide-react";
 import confetti from "canvas-confetti";
 
 // ─── Local Database Setup ────────────────────────────────────────────────────
@@ -23,15 +23,15 @@ db.version(2).stores({
 // ─── Constants & Helpers ─────────────────────────────────────────────────────
 const QUICK_CHIPS = [
   "Read 1 paper", "Update log", "Review flashcards", "Exercise", 
-  "Drink water", "Call family", "Groceries", "Meditate"
+  "Drink water", "Call family", "Groceries"
 ];
 
 const OVERDUE_MS = 24 * 60 * 60 * 1000;
 
 const CONTEXTS = {
-  life: { label: "Life", icon: Coffee, color: "bg-gray-400", textClass: "text-gray-500", activeClass: "bg-gray-500 text-white border-gray-500" },
-  work: { label: "Work", icon: Briefcase, color: "bg-teal-400", textClass: "text-teal-500", activeClass: "bg-teal-500 text-white border-teal-500" },
-  study: { label: "Study", icon: BookOpen, color: "bg-indigo-400", textClass: "text-indigo-500", activeClass: "bg-indigo-500 text-white border-indigo-500" }
+  life: { label: "Life", icon: Coffee, color: "bg-gray-400", textClass: "text-gray-500", activeClass: "bg-gray-500 text-white border-gray-500", tabClass: "border-gray-400 text-gray-500" },
+  work: { label: "Work", icon: Briefcase, color: "bg-teal-400", textClass: "text-teal-500", activeClass: "bg-teal-500 text-white border-teal-500", tabClass: "border-teal-400 text-teal-500" },
+  study: { label: "Study", icon: BookOpen, color: "bg-indigo-400", textClass: "text-indigo-500", activeClass: "bg-indigo-500 text-white border-indigo-500", tabClass: "border-indigo-400 text-indigo-500" }
 };
 
 function getIsNight() {
@@ -227,13 +227,11 @@ function Home({ userName, onReset }) {
     handleAdd(text);
   };
 
-  // ─── Wellness Feature: Streak Tracker ───
   const checkAndUpdateStreak = () => {
     const today = new Date().toDateString();
     const lastActive = localStorage.getItem("lastActiveDate");
     let currentStreak = parseInt(localStorage.getItem("streak") || "0");
 
-    // If already active today, do nothing
     if (lastActive === today) return;
 
     const yesterday = new Date();
@@ -242,7 +240,7 @@ function Home({ userName, onReset }) {
     if (lastActive === yesterday.toDateString()) {
       currentStreak += 1;
     } else {
-      currentStreak = 1; // Reset or start new streak
+      currentStreak = 1;
     }
 
     localStorage.setItem("streak", currentStreak.toString());
@@ -252,10 +250,7 @@ function Home({ userName, onReset }) {
 
   const completeTask = (id) => {
     if (completingIds.has(id)) return;
-    
-    // Update streak on completion
     checkAndUpdateStreak();
-    
     setCompletingIds((prev) => new Set(prev).add(id));
     confetti({
       particleCount: 80,
@@ -273,7 +268,6 @@ function Home({ userName, onReset }) {
     }, 400);
   };
 
-  // ─── Wellness Feature: Reschedule Task ───
   const handleBump = (id) => {
     db.tasks.update(id, { createdAt: Date.now() });
   };
@@ -288,13 +282,15 @@ function Home({ userName, onReset }) {
   const checkBorderClass = isNight ? "border-white/30" : "border-gray-300";
   const emptyIconClass = isNight ? "bg-white/10 text-white/30" : "bg-gray-100 text-gray-300";
   const emptyTextClass = isNight ? "text-white/30" : "text-gray-400";
-  const chipClass = isNight ? "bg-white/10 border-white/15 text-white/70 hover:bg-white/20 hover:text-white" : "bg-white/70 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-800";
   
-  const focusActiveClass = focusMode ? "bg-indigo-500 text-white border-indigo-500" : isNight ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20" : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
-  const filterBtnBase = `flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95`;
-  const filterBtnInactive = isNight ? "bg-white/10 border-white/15 text-white/60 hover:bg-white/20" : "bg-white/70 border-gray-200 text-gray-400 hover:bg-white hover:text-gray-700";
+  // Distinguish Quick Chips from tags visually
+  const quickChipClass = isNight ? "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white" : "bg-white/40 border-gray-200/50 text-gray-500 hover:bg-white hover:text-gray-800";
+  const focusActiveClass = focusMode ? "bg-indigo-500 text-white border-indigo-500 shadow-md" : isNight ? "bg-white/10 border-white/15 text-white/80 hover:bg-white/20" : "bg-white shadow-sm border-gray-200 text-gray-600 hover:border-gray-300";
 
-  // ─── Task Card Renderer ────────────────────────────────────────────────────
+  // Tab bases
+  const tabBase = `pb-2 text-sm font-medium border-b-2 transition-all duration-200 px-1`;
+  const tabInactive = isNight ? "border-transparent text-white/40 hover:text-white/70" : "border-transparent text-gray-400 hover:text-gray-600";
+
   const renderTaskCard = (task) => {
     const isCompleting = completingIds.has(task.id);
     const isOverdue = now - task.createdAt > OVERDUE_MS;
@@ -369,16 +365,26 @@ function Home({ userName, onReset }) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-3">
-                <h1 className={`text-4xl md:text-5xl font-bold tracking-tight transition-colors duration-700 ${headingClass}`}>
-                  Hello, {userName}.
+                <h1 className={`text-4xl md:text-5xl font-bold tracking-tight transition-colors duration-700 flex items-center gap-3 ${headingClass}`}>
+                  Hello, {userName}
+                  <button
+                    onClick={onReset}
+                    title="Change Name"
+                    className={`shrink-0 p-2 rounded-full transition-all duration-150 active:scale-95 ${
+                      isNight ? "text-white/30 hover:text-white/80 hover:bg-white/10" : "text-gray-300 hover:text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Pencil size={18} />
+                  </button>
                 </h1>
-                {/* ── Streak Badge ── */}
+                
+                {/* ── Streak Badge (Only shows if > 0) ── */}
                 <AnimatePresence>
                   {streak > 0 && (
                     <motion.div 
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-sm ${isNight ? "bg-orange-500/20 border-orange-500/30 text-orange-400" : "bg-orange-50 border-orange-200 text-orange-500"}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-sm ${isNight ? "bg-orange-500/20 border-orange-500/30 text-orange-400" : "bg-orange-50 border-orange-200 text-orange-500"}`}
                     >
                       <Flame size={16} className={`fill-current ${isNight ? "text-orange-400" : "text-orange-500"}`} />
                       <span className="text-sm font-bold">{streak}</span>
@@ -390,20 +396,10 @@ function Home({ userName, onReset }) {
                 {subHeading}
               </p>
             </div>
-            <button
-              onClick={onReset}
-              className={`mt-2 shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition-all duration-150 active:scale-95 ${
-                isNight
-                  ? "text-white/30 hover:text-white/60 hover:bg-white/8"
-                  : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"
-              }`}
-            >
-              Change name
-            </button>
           </div>
         </header>
 
-        <form onSubmit={handleFormSubmit} className={`mb-3 relative flex items-center rounded-2xl border backdrop-blur-sm shadow-sm ${cardBorderClass}`}>
+        <form onSubmit={handleFormSubmit} className={`mb-4 relative flex items-center rounded-2xl border backdrop-blur-sm shadow-sm ${cardBorderClass}`}>
           <input
             type="text"
             value={text}
@@ -420,56 +416,23 @@ function Home({ userName, onReset }) {
           </button>
         </form>
 
-        <div className="flex gap-2 mb-6">
-          {Object.entries(CONTEXTS).map(([key, config]) => {
-            const Icon = config.icon;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setNewTaskContext(key)}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all duration-200 ${
-                  newTaskContext === key 
-                    ? config.activeClass 
-                    : isNight ? "border-white/15 text-white/50 hover:bg-white/10" : "border-gray-200 text-gray-400 hover:bg-gray-50"
-                }`}
-              >
-                <Icon size={12} className={newTaskContext === key ? "text-white" : config.textClass} />
-                {config.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none">
-          {QUICK_CHIPS.map((chip) => (
-            <button
-              key={chip}
-              onClick={() => handleAdd(chip)}
-              className={`shrink-0 text-sm px-4 py-2 rounded-full border backdrop-blur-sm transition-all duration-150 active:scale-95 ${chipClass}`}
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div className="flex gap-2 overflow-x-auto scrollbar-none">
-            <button 
-              onClick={() => setActiveFilter("all")} 
-              className={`${filterBtnBase} ${activeFilter === "all" ? (isNight ? "bg-white/20 text-white border-white/30" : "bg-gray-800 text-white border-gray-800") : filterBtnInactive}`}
-            >
-              All
-            </button>
+        {/* ── Elevated Action Row: Categories & Focus Mode ── */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex gap-2">
             {Object.entries(CONTEXTS).map(([key, config]) => {
               const Icon = config.icon;
               return (
                 <button
                   key={key}
-                  onClick={() => setActiveFilter(key)}
-                  className={`${filterBtnBase} ${activeFilter === key ? config.activeClass : filterBtnInactive}`}
+                  type="button"
+                  onClick={() => setNewTaskContext(key)}
+                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all duration-200 ${
+                    newTaskContext === key 
+                      ? config.activeClass 
+                      : isNight ? "border-white/15 text-white/50 hover:bg-white/10" : "border-gray-200 text-gray-400 hover:bg-gray-50"
+                  }`}
                 >
-                  <Icon size={13} className={activeFilter === key ? "text-white" : config.textClass} />
+                  <Icon size={12} className={newTaskContext === key ? "text-white" : config.textClass} />
                   {config.label}
                 </button>
               );
@@ -478,11 +441,50 @@ function Home({ userName, onReset }) {
           
           <button
             onClick={() => setFocusMode((f) => !f)}
-            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 ${focusActiveClass}`}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border transition-all duration-200 active:scale-95 ${focusActiveClass}`}
           >
-            <Target size={13} strokeWidth={2.5} />
-            {focusMode ? "Focus: on" : "Focus mode"}
+            <Target size={14} strokeWidth={2.5} />
+            {focusMode ? "Focus: ON" : "Focus"}
           </button>
+        </div>
+
+        {/* ── Quick Add Section (Differentiated) ── */}
+        <div className="mb-8">
+          <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ml-1 ${isNight ? "text-white/30" : "text-gray-400"}`}>
+            Quick Add
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {QUICK_CHIPS.map((chip) => (
+              <button
+                key={chip}
+                onClick={() => handleAdd(chip)}
+                className={`flex items-center gap-1.5 shrink-0 text-sm px-4 py-2 rounded-full border backdrop-blur-sm transition-all duration-150 active:scale-95 ${quickChipClass}`}
+              >
+                <Plus size={14} className={isNight ? "text-white/40" : "text-gray-400"} />
+                {chip}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Clean Underlined Tabs ── */}
+        <div className={`flex gap-6 border-b mb-6 overflow-x-auto scrollbar-none ${isNight ? "border-white/10" : "border-gray-200"}`}>
+          <button 
+            onClick={() => setActiveFilter("all")} 
+            className={`${tabBase} ${activeFilter === "all" ? (isNight ? "border-white text-white" : "border-gray-800 text-gray-900") : tabInactive}`}
+          >
+            All
+          </button>
+          {Object.entries(CONTEXTS).map(([key, config]) => (
+            <button
+              key={key}
+              onClick={() => setActiveFilter(key)}
+              className={`${tabBase} ${activeFilter === key ? (isNight ? config.tabClass : config.tabClass) : tabInactive}`}
+              style={activeFilter === key && !isNight ? { borderColor: 'currentColor' } : {}}
+            >
+              {config.label}
+            </button>
+          ))}
         </div>
 
         <div className="flex-1">
@@ -496,13 +498,22 @@ function Home({ userName, onReset }) {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center h-48"
+              className="flex flex-col items-center justify-center h-56 mt-4"
             >
-              <div className={`w-16 h-16 mb-4 rounded-full flex items-center justify-center ${emptyIconClass}`}>
-                <Wind size={28} />
-              </div>
+              {streak > 0 && activeFilter === "all" ? (
+                 <div className="flex flex-col items-center justify-center text-orange-500 mb-6">
+                    <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isNight ? 'bg-orange-500/20' : 'bg-orange-50'}`}>
+                      <Flame size={40} className={`fill-current ${isNight ? 'text-orange-400' : 'text-orange-500'}`} />
+                    </div>
+                    <p className={`text-xl font-bold ${isNight ? 'text-white' : 'text-gray-900'}`}>{streak} Day Streak!</p>
+                 </div>
+              ) : (
+                 <div className={`w-16 h-16 mb-4 rounded-full flex items-center justify-center ${emptyIconClass}`}>
+                   <Wind size={28} />
+                 </div>
+              )}
               <p className={`text-sm ${emptyTextClass}`}>
-                {activeFilter === "all" ? "You are all caught up." : `No pending ${CONTEXTS[activeFilter].label.toLowerCase()} tasks.`}
+                {activeFilter === "all" ? "You are all caught up for today." : `No pending ${CONTEXTS[activeFilter].label.toLowerCase()} tasks.`}
               </p>
             </motion.div>
           ) : focusMode ? (
